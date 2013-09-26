@@ -19,11 +19,6 @@ package com.android.rs.livepreview;
 //import com.android.cts.verifier.R;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.graphics.Bitmap;
-import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
@@ -31,25 +26,20 @@ import android.hardware.Camera;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v8.renderscript.RenderScript;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.View;
 import android.view.TextureView;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.ImageView;
 import android.widget.Spinner;
 
 import java.io.IOException;
-import java.lang.InterruptedException;
-import java.lang.Math;
-import java.lang.Thread;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
 
-import android.renderscript.*;
 
 /**
  * Tests for manual verification of the CDD-required camera output formats
@@ -85,7 +75,7 @@ public class CameraPreviewActivity extends Activity
     private static final int STATE_NO_CALLBACKS = 2;
     private int mState = STATE_OFF;
     private boolean mProcessInProgress = false;
-    private boolean mProcessingFirstFrame = false;
+    //private boolean mProcessingFirstFrame = false;
 
 
     private RenderScript mRS;
@@ -166,7 +156,7 @@ public class CameraPreviewActivity extends Activity
                     }
                 }
 
-                public void onNothingSelected(AdapterView parent) {
+                public void onNothingSelected(AdapterView<?> parent) {
 
                 }
 
@@ -182,7 +172,7 @@ public class CameraPreviewActivity extends Activity
                     }
                 }
 
-                public void onNothingSelected(AdapterView parent) {
+                public void onNothingSelected(AdapterView<?> parent) {
 
                 }
 
@@ -290,7 +280,7 @@ public class CameraPreviewActivity extends Activity
         }
         //mFormatView.setColorFilter(mYuv2RgbFilter);
 
-        mProcessingFirstFrame = true;
+        //mProcessingFirstFrame = true;
         try {
             mCamera.setPreviewTexture(mPreviewTexture);
             mCamera.startPreview();

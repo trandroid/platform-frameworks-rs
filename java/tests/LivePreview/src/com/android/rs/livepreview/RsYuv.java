@@ -18,10 +18,19 @@ package com.android.rs.livepreview;
 
 
 import android.annotation.TargetApi;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
-import android.renderscript.*;
+import android.support.v8.renderscript.Allocation;
+import android.support.v8.renderscript.Element;
+import android.support.v8.renderscript.RenderScript;
+import android.support.v8.renderscript.ScriptGroup;
+import android.support.v8.renderscript.ScriptIntrinsicYuvToRGB;
+import android.support.v8.renderscript.Type;
 import android.view.Surface;
+import android.view.Surface.OutOfResourcesException;
 import android.view.TextureView;
 
 @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
@@ -33,9 +42,11 @@ public class RsYuv implements TextureView.SurfaceTextureListener
     private Allocation mAllocationOut;
     private Allocation mAllocationIn;
     private ScriptIntrinsicYuvToRGB mYuv;
-    private boolean mHaveSurface;
-    private SurfaceTexture mSurface;
+    private SurfaceTexture mSurfaceTexture;
     private ScriptGroup mGroup;
+    private Surface mSurface;
+    private ScriptRunner mScriptRunner;
+    private Bitmap mBitmapOut;
 
     RsYuv(RenderScript rs) {
         mRS = rs;
@@ -43,14 +54,40 @@ public class RsYuv implements TextureView.SurfaceTextureListener
     }
 
     void setupSurface() {
-        if (mAllocationOut != null) {
-            mAllocationOut.setSurface(new Surface(mSurface));
+    	if (mSurfaceTexture != null) {
+    		mSurface = new Surface(mSurfaceTexture);
+    		mScriptRunner = new ScriptRunner() {
+				@Override
+				public void execute(byte[] input) {
+			        mAllocationIn.copyFrom(input);
+		            mGroup.setOutput(mYuv.getKernelID(), mAllocationOut);
+		            mGroup.execute();
+		            
+		            Canvas canvas = null;
+					try {
+					    Rect fill = new Rect(0, 0, mWidth, mHeight);
+						canvas = mSurface.lockCanvas(null);
+						canvas.drawBitmap(mBitmapOut, null, fill, null);
+					} catch (IllegalArgumentException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (OutOfResourcesException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+                    finally {
+                        mSurface.unlockCanvasAndPost(canvas);
+					}
+				}
+			};
         }
-        if (mSurface != null) {
-            mHaveSurface = true;
-        } else {
-            mHaveSurface = false;
-        }
+    	else {
+    		mSurface = null;
+    		mScriptRunner = new ScriptRunner() {
+				@Override
+				public void execute(byte[] input) {}
+			};
+    	}
     }
 
     void reset(int width, int height) {
@@ -59,17 +96,21 @@ public class RsYuv implements TextureView.SurfaceTextureListener
         }
 
         android.util.Log.v("cpa", "reset " + width + ", " + height);
+
+        if (mWidth != width
+        		|| mHeight != height) {
+        	if (mBitmapOut != null) {
+        		mBitmapOut.recycle();
+        	}
+        	mBitmapOut = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        }
+        
         mHeight = height;
         mWidth = width;
 
-        Type.Builder tb = new Type.Builder(mRS, Element.RGBA_8888(mRS));
-        tb.setX(mWidth);
-        tb.setY(mHeight);
-        Type t = tb.create();
-        mAllocationOut = Allocation.createTyped(mRS, t, Allocation.USAGE_SCRIPT |
-                                                        Allocation.USAGE_IO_OUTPUT);
+        mAllocationOut = Allocation.createFromBitmap(mRS, mBitmapOut);
 
-
+        Type.Builder tb;
         tb = new Type.Builder(mRS, Element.createPixel(mRS, Element.DataType.UNSIGNED_8, Element.DataKind.PIXEL_YUV));
         tb.setX(mWidth);
         tb.setY(mHeight);
@@ -87,45 +128,40 @@ public class RsYuv implements TextureView.SurfaceTextureListener
     public int getWidth() {
         return mWidth;
     }
+
     public int getHeight() {
         return mHeight;
     }
 
+    interface ScriptRunner {
+    	public void execute(byte[] input);
+    }
+    
     //private long mTiming[] = new long[50];
     //private int mTimingSlot = 0;
 
     void execute(byte[] yuv) {
-        mAllocationIn.copyFrom(yuv);
-        if (mHaveSurface) {
-            mGroup.setOutput(mYuv.getKernelID(), mAllocationOut);
-            mGroup.execute();
-
-            //mYuv.forEach(mAllocationOut);
-            //mScript.forEach_root(mAllocationOut, mAllocationOut);
-            mAllocationOut.ioSend();
-        }
+    	mScriptRunner.execute(yuv);
     }
-
-
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
         android.util.Log.v("cpa", "onSurfaceTextureAvailable " + surface);
-        mSurface = surface;
+        mSurfaceTexture = surface;
         setupSurface();
     }
 
     @Override
     public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
         android.util.Log.v("cpa", "onSurfaceTextureSizeChanged " + surface);
-        mSurface = surface;
+        mSurfaceTexture = surface;
         setupSurface();
     }
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
         android.util.Log.v("cpa", "onSurfaceTextureDestroyed " + surface);
-        mSurface = surface;
+        mSurfaceTexture = surface;
         setupSurface();
         return true;
     }

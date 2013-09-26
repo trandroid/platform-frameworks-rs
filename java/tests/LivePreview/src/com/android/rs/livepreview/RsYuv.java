@@ -16,24 +16,15 @@
 
 package com.android.rs.livepreview;
 
-import android.app.Activity;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.os.Bundle;
+
+import android.annotation.TargetApi;
 import android.graphics.SurfaceTexture;
-import android.renderscript.Allocation;
-import android.renderscript.Matrix3f;
-import android.renderscript.RenderScript;
-import android.util.Log;
-import android.view.TextureView;
-import android.view.View;
-
-import android.content.res.Resources;
+import android.os.Build;
 import android.renderscript.*;
+import android.view.Surface;
+import android.view.TextureView;
 
-import android.graphics.Bitmap;
-
+@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
 public class RsYuv implements TextureView.SurfaceTextureListener
 {
     private int mHeight;
@@ -41,7 +32,6 @@ public class RsYuv implements TextureView.SurfaceTextureListener
     private RenderScript mRS;
     private Allocation mAllocationOut;
     private Allocation mAllocationIn;
-    private ScriptC_yuv mScript;
     private ScriptIntrinsicYuvToRGB mYuv;
     private boolean mHaveSurface;
     private SurfaceTexture mSurface;
@@ -49,13 +39,12 @@ public class RsYuv implements TextureView.SurfaceTextureListener
 
     RsYuv(RenderScript rs) {
         mRS = rs;
-        mScript = new ScriptC_yuv(mRS);
         mYuv = ScriptIntrinsicYuvToRGB.create(rs, Element.RGBA_8888(mRS));
     }
 
     void setupSurface() {
         if (mAllocationOut != null) {
-            mAllocationOut.setSurfaceTexture(mSurface);
+            mAllocationOut.setSurface(new Surface(mSurface));
         }
         if (mSurface != null) {
             mHaveSurface = true;
@@ -72,7 +61,6 @@ public class RsYuv implements TextureView.SurfaceTextureListener
         android.util.Log.v("cpa", "reset " + width + ", " + height);
         mHeight = height;
         mWidth = width;
-        mScript.invoke_setSize(mWidth, mHeight);
 
         Type.Builder tb = new Type.Builder(mRS, Element.RGBA_8888(mRS));
         tb.setX(mWidth);
@@ -92,9 +80,7 @@ public class RsYuv implements TextureView.SurfaceTextureListener
 
 
         ScriptGroup.Builder b = new ScriptGroup.Builder(mRS);
-        b.addKernel(mScript.getKernelID_root());
         b.addKernel(mYuv.getKernelID());
-        b.addConnection(t, mYuv.getKernelID(), mScript.getKernelID_root());
         mGroup = b.create();
     }
 
@@ -105,18 +91,18 @@ public class RsYuv implements TextureView.SurfaceTextureListener
         return mHeight;
     }
 
-    private long mTiming[] = new long[50];
-    private int mTimingSlot = 0;
+    //private long mTiming[] = new long[50];
+    //private int mTimingSlot = 0;
 
     void execute(byte[] yuv) {
         mAllocationIn.copyFrom(yuv);
         if (mHaveSurface) {
-            mGroup.setOutput(mScript.getKernelID_root(), mAllocationOut);
+            mGroup.setOutput(mYuv.getKernelID(), mAllocationOut);
             mGroup.execute();
 
             //mYuv.forEach(mAllocationOut);
             //mScript.forEach_root(mAllocationOut, mAllocationOut);
-            mAllocationOut.ioSendOutput();
+            mAllocationOut.ioSend();
         }
     }
 
